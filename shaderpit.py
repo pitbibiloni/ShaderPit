@@ -2,7 +2,7 @@ ML_GRUNGE_SYNCING = False
 
 bl_info = {
     "name": "ShaderPit V0.9.79",
-    "author": "OpenAI",
+    "author": "Pit Bibiloni",
     "version": (0, 9, 79),
     "blender": (5, 2, 0),
     "location": "View3D > Sidebar > ShaderPit",
