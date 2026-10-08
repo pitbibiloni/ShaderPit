@@ -1,9 +1,9 @@
 ML_GRUNGE_SYNCING = False
 
 bl_info = {
-    "name": "ShaderPit V0.9.79",
+    "name": "ShaderPit V0.9.91",
     "author": "Pit Bibiloni",
-    "version": (0, 9, 79),
+    "version": (0, 9, 91),
     "blender": (5, 2, 0),
     "location": "View3D > Sidebar > ShaderPit",
     "description": "Material variation and look-development tools for Blender.",
@@ -535,6 +535,246 @@ def _update_grunge_color_image(self,context):
     _update_grunge_color_source(self,context)
 
 
+
+
+
+ML_EDGEWEAR_COPYING = False
+
+
+def _update_edgewear_roughness(self,context):
+    if ML_EDGEWEAR_COPYING:
+        return
+    mat=getattr(self,"id_data",None)
+    if not mat or not mat.node_tree:
+        return
+    node=_find_effect_node(mat,"Edgewear","RoughnessMix")
+    if node and len(node.inputs) > 2:
+        value=max(0.0,min(1.0,float(self.edgewear_roughness)))
+        node.inputs[2].default_value=(value,value,value,1.0)
+
+
+def _update_edgewear_height(self,context):
+    if ML_EDGEWEAR_COPYING:
+        return
+    mat=getattr(self,"id_data",None)
+    if not mat or not mat.node_tree:
+        return
+    bump=_find_effect_node(mat,"Edgewear","Bump")
+    ramp=_find_effect_node(mat,"Edgewear","MaskRamp")
+    invert=_find_effect_node(mat,"Edgewear","HeightInvert")
+    if not bump:
+        return
+    h=float(self.edgewear_height)
+    if bump.inputs.get("Strength"):
+        bump.inputs["Strength"].default_value=abs(h)
+    if bump.inputs.get("Height"):
+        links=mat.node_tree.links
+        for link in list(bump.inputs["Height"].links):
+            links.remove(link)
+        if h < 0.0 and invert:
+            links.new(invert.outputs["Value"],bump.inputs["Height"])
+        elif ramp:
+            links.new(ramp.outputs["Color"],bump.inputs["Height"])
+
+
+def _update_edgewear_noise_scale(self,context):
+    if ML_EDGEWEAR_COPYING:
+        return
+    mat=getattr(self,"id_data",None)
+    if not mat or not mat.node_tree:
+        return
+    node=_find_effect_node(mat,"Edgewear","Texture","TEX_NOISE")
+    if node and node.inputs.get("Scale"):
+        node.inputs["Scale"].default_value=float(self.edgewear_noise_scale)
+
+
+def _update_edgewear_noise(self,context):
+    if ML_EDGEWEAR_COPYING:
+        return
+    mat=getattr(self,"id_data",None)
+    if not mat or not mat.node_tree:
+        return
+    node=_find_effect_node(mat,"Edgewear","Texture","TEX_NOISE")
+    if not node:
+        return
+    for name,value in (
+        ("Scale",self.edgewear_noise_scale),
+        ("Detail",self.edgewear_noise_detail),
+        ("Roughness",self.edgewear_noise_roughness),
+        ("Lacunarity",self.edgewear_noise_lacunarity),
+        ("W",self.edgewear_noise_seed),
+        ("Distortion",self.edgewear_noise_distortion),
+    ):
+        if node.inputs.get(name):
+            node.inputs[name].default_value=float(value)
+    try:
+        node.normalize=bool(self.edgewear_noise_normalize)
+    except Exception:
+        pass
+def _update_edgewear_breakup(self,context):
+    if ML_EDGEWEAR_COPYING:
+        return
+    mat=getattr(self,"id_data",None)
+    if not mat or not mat.node_tree:
+        return
+    mask_mix=_find_effect_node(mat,"Edgewear","Mask","MIX_RGB")
+    if not mask_mix:
+        return
+    if mask_mix.inputs.get("Fac"):
+        mask_mix.inputs[0].default_value=max(0.0,min(1.0,float(self.edgewear_breakup)))
+
+def _update_edgewear_ao_distance(self,context):
+    if ML_EDGEWEAR_COPYING:
+        return
+    mat=getattr(self,"id_data",None)
+    if not mat or not mat.node_tree: return
+    ao=_find_effect_node(mat,"Edgewear","AO","AMBIENT_OCCLUSION")
+    if ao and ao.inputs.get("Distance"):
+        ao.inputs["Distance"].default_value=float(self.edgewear_ao_distance)
+
+
+def _enforce_edgewear_ao_defaults(mat):
+    if not mat or not mat.node_tree:
+        return
+    ao=_find_effect_node(mat,"Edgewear","AO","AMBIENT_OCCLUSION")
+    if not ao:
+        return
+    if ao.inputs.get("Distance"):
+        ao.inputs["Distance"].default_value=float(getattr(mat.material_lab_settings,"edgewear_ao_distance",0.02))
+    try:
+        ao.samples=5
+    except Exception:
+        pass
+    try:
+        ao.inside=True
+    except Exception:
+        pass
+    try:
+        ao.only_local=True
+    except Exception:
+        pass
+
+
+def _update_edgewear_blend_mode(self,context):
+    if ML_EDGEWEAR_COPYING:
+        return
+    mat=getattr(self,"id_data",None)
+    if not mat or not mat.node_tree:
+        return
+    node=_find_effect_node(mat,"Edgewear","ColorBlend")
+    if node:
+        try:
+            node.blend_type=self.edgewear_blend_mode
+        except Exception:
+            pass
+
+def _update_edgewear_color_blend(self,context):
+    if ML_EDGEWEAR_COPYING:
+        return
+    mat=getattr(self,"id_data",None)
+    if not mat or not mat.node_tree:
+        return
+
+    # Blending must only change the Factor of the existing ColorBlend node.
+    # Do not rebuild or reconnect links here: when a texture is selected,
+    # changing the slider must preserve the texture connection.
+    blend=_find_effect_node(mat,"Edgewear","ColorBlend")
+    if not blend or not blend.inputs.get("Fac"):
+        return
+    try:
+        blend.inputs["Fac"].default_value=max(0.0,min(1.0,float(self.edgewear_color_blend)))
+    except Exception:
+        pass
+
+def _update_edgewear_color_source(self,context):
+    if ML_EDGEWEAR_COPYING:
+        return
+    mat=getattr(self,"id_data",None)
+    if not mat or not mat.node_tree:
+        return
+
+    color_mix=_find_effect_node(mat,"Edgewear","Mix")
+    color=_find_effect_node(mat,"Edgewear","Color")
+    image=_find_effect_node(mat,"Edgewear","ColorImage","TEX_IMAGE")
+    blend=_find_effect_node(mat,"Edgewear","ColorBlend")
+    if not color_mix or not blend:
+        return
+
+    links=mat.node_tree.links
+
+    if len(blend.inputs) > 2:
+        for l in list(blend.inputs[2].links):
+            links.remove(l)
+
+        if self.edgewear_color_source=="TEXTURE" and self.edgewear_color_image and image:
+            links.new(image.outputs["Color"],blend.inputs[2])
+        elif color:
+            color.outputs["Color"].default_value=tuple(self.edgewear_color)
+            links.new(color.outputs["Color"],blend.inputs[2])
+
+    if blend.outputs.get("Color") and len(color_mix.inputs) > 2:
+        for l in list(color_mix.inputs[2].links):
+            links.remove(l)
+        links.new(blend.outputs["Color"],color_mix.inputs[2])
+
+
+def _update_edgewear_color_image(self,context):
+    if ML_EDGEWEAR_COPYING:
+        return
+    mat=getattr(self,"id_data",None)
+    if not mat or not mat.node_tree: return
+    image=_find_effect_node(mat,"Edgewear","ColorImage","TEX_IMAGE")
+    mapping=_find_effect_node(mat,"Edgewear","ColorMapping")
+    if image:
+        image.image=self.edgewear_color_image
+    if mapping and mapping.inputs.get("Scale"):
+        t=float(self.edgewear_color_tiling)
+        mapping.inputs["Scale"].default_value=(t,t,t)
+    _update_edgewear_color_source(self,context)
+
+
+def _update_edgewear_noise_mapping(self,context):
+    if ML_EDGEWEAR_COPYING:
+        return
+    mat=getattr(self,"id_data",None)
+    if mat and mat.node_tree:
+        _set_effect_mapping_source(mat,"Edgewear",self.edgewear_noise_mapping_source)
+
+def _update_edgewear_color_mapping(self,context):
+    if ML_EDGEWEAR_COPYING:
+        return
+    mat=getattr(self,"id_data",None)
+    if not mat or not mat.node_tree:
+        return
+    coord=mat.node_tree.nodes.get("ML_Edgewear_Coord")
+    mapping=_find_effect_node(mat,"Edgewear","ColorMapping")
+    if not coord or not mapping:
+        return
+    socket_name={"GENERATED":"Generated","UV":"UV","OBJECT":"Object"}.get(str(self.edgewear_color_mapping_source),str(self.edgewear_color_mapping_source))
+    source=coord.outputs.get(socket_name)
+    if not source:
+        return
+    links=mat.node_tree.links
+    for link in list(mapping.inputs["Vector"].links):
+        links.remove(link)
+    links.new(source,mapping.inputs["Vector"])
+
+# Backward-compatible alias for older Edgewear settings data.
+def _update_edgewear_mapping(self,context):
+    if ML_EDGEWEAR_COPYING:
+        return
+    _update_edgewear_noise_mapping(self,context)
+
+
+def _update_edgewear_color(self,context):
+    if ML_EDGEWEAR_COPYING:
+        return
+    mat=getattr(self,"id_data",None)
+    if not mat or not mat.node_tree:
+        return
+    node=_find_effect_node(mat,"Edgewear","Color")
+    if node:
+        node.outputs["Color"].default_value=tuple(self.edgewear_color)
 
 
 
@@ -1224,6 +1464,12 @@ class ML_OT_view_mask(Operator):
         elif self.effect=="Dirt":
             node=_find_effect_node(mat,"Dirt","MaskRamp")
             socket=node.outputs.get("Color") if node else None
+        elif self.effect=="Edgewear":
+            node=_find_effect_node(mat,"Edgewear","MaskRamp")
+            socket=node.outputs.get("Color") if node else None
+        elif self.effect=="Edgewear":
+            node=_find_effect_node(mat,"Edgewear","MaskRamp")
+            socket=node.outputs.get("Color") if node else None
         elif self.effect=="Roughness":
             node=_find_effect_node(mat,"Roughness","Mask")
             socket=node.outputs.get("Color") if node else None
@@ -1239,6 +1485,7 @@ class ML_OT_view_mask(Operator):
         st=mat.material_lab_settings
         st.grunge_view_mask=False
         st.dirt_view_mask=False
+        st.edgewear_view_mask=False
         st.roughness_view_mask=False
         st.ao_view_mask=False
         for layer in st.mixer_layers:
@@ -1248,6 +1495,9 @@ class ML_OT_view_mask(Operator):
             st.grunge_view_mask=True
         elif self.effect=="Dirt":
             st.dirt_view_mask=True
+
+        elif self.effect=="Edgewear":
+            st.edgewear_view_mask=True
         elif self.effect=="Roughness":
             st.roughness_view_mask=True
         elif self.effect=="AO":
@@ -1817,6 +2067,56 @@ class ML_MaterialSettings(PropertyGroup):
     dirt_roughness: FloatProperty(name="Dirt Roughness",default=0.82,min=0.0,max=1.0,soft_min=0.0,soft_max=1.0,update=_update_dirt_roughness)
     dirt_noise_scale: FloatProperty(name="Noise Scale",default=5.0,min=0.0,max=100.0,soft_min=0.0,soft_max=100.0,update=_update_dirt_noise_scale)
 
+    edgewear_breakup: FloatProperty(name="Breakup",default=0.5,min=0.0,max=0.99,soft_min=0.0,soft_max=0.99,update=_update_edgewear_breakup)
+    edgewear_ao_distance: FloatProperty(name="Distance",default=0.02,min=0.01,max=0.09,soft_min=0.01,soft_max=0.09,update=_update_edgewear_ao_distance)
+    edgewear_color_blend: FloatProperty(name="Blending",default=1.0,min=0.0,max=1.0,soft_min=0.0,soft_max=1.0,update=_update_edgewear_color_blend)
+    edgewear_blend_mode: EnumProperty(name="Blend Mode",items=(
+        ("MIX","Mix","Mix"),("DARKEN","Darken","Darken"),("MULTIPLY","Multiply","Multiply"),("BURN","Burn","Burn"),
+        ("LIGHTEN","Lighten","Lighten"),("SCREEN","Screen","Screen"),("DODGE","Dodge","Dodge"),("ADD","Add","Add"),
+        ("OVERLAY","Overlay","Overlay"),("SOFT_LIGHT","Soft Light","Soft Light"),("LINEAR_LIGHT","Linear Light","Linear Light"),
+        ("DIFFERENCE","Difference","Difference"),("EXCLUSION","Exclusion","Exclusion"),("SUBTRACT","Subtract","Subtract"),
+        ("DIVIDE","Divide","Divide"),("HUE","Hue","Hue"),("SATURATION","Saturation","Saturation"),("COLOR","Color","Color"),("VALUE","Value","Value")
+    ),default="MIX",update=_update_edgewear_blend_mode)
+    edgewear_color_source: EnumProperty(
+        name="Color",
+        items=(("COLOR","Color","Flat color"),("TEXTURE","Texture","Mud/surface texture")),
+        default="COLOR",
+        update=_update_edgewear_color_source
+    )
+    edgewear_color_image: PointerProperty(name="Color Texture",type=bpy.types.Image,update=_update_edgewear_color_image)
+    edgewear_color_tiling: FloatProperty(name="Color Tiling",default=1.0,min=0.0,max=100.0,soft_min=0.0,soft_max=10.0,update=_update_edgewear_color_image)
+
+    edgewear_noise_mapping_source: EnumProperty(
+        name="Noise Mapping",
+        items=(("UV","UV","UV"),("GENERATED","Generated","Generated"),("OBJECT","Object","Object")),
+        default="GENERATED",
+        update=_update_edgewear_noise_mapping
+    )
+    edgewear_color_mapping_source: EnumProperty(
+        name="Texture Mapping",
+        items=(("UV","UV","UV"),("GENERATED","Generated","Generated"),("OBJECT","Object","Object")),
+        default="GENERATED",
+        update=_update_edgewear_color_mapping
+    )
+    edgewear_color: FloatVectorProperty(
+        name="Edgewear Color",
+        subtype="COLOR",
+        size=4,
+        default=(1.0,1.0,1.0,1.0),
+        min=0.0,
+        max=1.0,
+        update=_update_edgewear_color
+    )
+    edgewear_roughness: FloatProperty(name="Edgewear Roughness",default=0.82,min=0.0,max=1.0,soft_min=0.0,soft_max=1.0,update=_update_edgewear_roughness)
+    edgewear_noise_scale: FloatProperty(name="Scale",default=10.0,min=0.0,max=100.0,soft_min=0.0,soft_max=20.0,update=_update_edgewear_noise)
+    edgewear_noise_detail: FloatProperty(name="Detail",default=10.0,min=0.0,max=100.0,soft_min=0.0,soft_max=20.0,update=_update_edgewear_noise)
+    edgewear_noise_roughness: FloatProperty(name="Roughness",default=1.0,min=0.0,max=1.0,soft_min=0.0,soft_max=1.0,update=_update_edgewear_noise)
+    edgewear_noise_lacunarity: FloatProperty(name="Lacunarity",default=2.0,min=0.0,max=100.0,soft_min=0.0,soft_max=10.0,update=_update_edgewear_noise)
+    edgewear_noise_seed: FloatProperty(name="Seed",default=0.0,min=0.0,max=10.0,soft_min=0.0,soft_max=10.0,update=_update_edgewear_noise)
+    edgewear_noise_distortion: FloatProperty(name="Distortion",default=0.0,min=0.0,max=100.0,soft_min=0.0,soft_max=20.0,update=_update_edgewear_noise)
+    edgewear_noise_normalize: BoolProperty(name="Normalize",default=False,update=_update_edgewear_noise)
+    edgewear_height: FloatProperty(name="Height",default=0.0,min=-1.0,max=1.0,soft_min=-1.0,soft_max=1.0,update=_update_edgewear_height)
+
     grunge_mapping_source: EnumProperty(
         name="Mapping",
         items=(("UV","UV","UV"),("GENERATED","Generated","Generated"),("OBJECT","Object","Object")),
@@ -1883,6 +2183,13 @@ class ML_MaterialSettings(PropertyGroup):
     grunge_view_mask: BoolProperty(default=False)
     dirt_mask_ramp_collapsed: BoolProperty(default=True)
     dirt_view_mask: BoolProperty(default=False)
+    edgewear_mask_ramp_collapsed: BoolProperty(default=True)
+    edgewear_ao_ramp_collapsed: BoolProperty(default=True)
+    edgewear_noise_ramp_collapsed: BoolProperty(default=True)
+    edgewear_noise_collapsed: BoolProperty(default=False)
+    edgewear_noise_mapping_collapsed: BoolProperty(default=True)
+    edgewear_height_collapsed: BoolProperty(default=False)
+    edgewear_view_mask: BoolProperty(default=False)
     roughness_mask_ramp_collapsed: BoolProperty(default=True)
     roughness_view_mask: BoolProperty(default=False)
     ao_mask_ramp_collapsed: BoolProperty(default=True)
@@ -2005,30 +2312,104 @@ class ML_OT_apply_material(Operator):
 
 
 def _copy_material_lab_settings(src_mat,dst_mat):
+    global ML_EDGEWEAR_COPYING
     try:
         src=src_mat.material_lab_settings
         dst=dst_mat.material_lab_settings
 
+        # The duplicated node tree is already a faithful copy of the source.
+        # Capture the actual Edgewear Color node value before copying RNA data,
+        # because the destination RNA property can still contain its default
+        # value while Blender is initializing the copied material settings.
+        # This makes the node itself the fallback source of truth for the
+        # visible Edgewear color during duplication.
+        source_edgewear_node_color=None
+        try:
+            if src_mat.node_tree:
+                source_edgewear_node=_find_effect_node(src_mat,"Edgewear","Color")
+                if source_edgewear_node and source_edgewear_node.outputs.get("Color"):
+                    source_edgewear_node_color=tuple(source_edgewear_node.outputs["Color"].default_value)
+        except Exception:
+            source_edgewear_node_color=None
+
+        # Copy RNA values without allowing Edgewear update callbacks to rebuild
+        # or reconnect its node graph while the values are being restored.
+        edgewear_values={}
         for prop in src.bl_rna.properties:
             name=prop.identifier
-            if name=="rna_type" or prop.is_readonly or prop.type=="COLLECTION":
-                continue
-            try:
-                setattr(dst,name,getattr(src,name))
-            except Exception:
-                pass
+            if name.startswith("edgewear_") and not prop.is_readonly and prop.type!="COLLECTION":
+                try:
+                    edgewear_values[name]=getattr(src,name)
+                except Exception:
+                    pass
 
-        dst.mixer_layers.clear()
-        for src_layer in src.mixer_layers:
-            dst_layer=dst.mixer_layers.add()
-            for prop in src_layer.bl_rna.properties:
+        ML_EDGEWEAR_COPYING=True
+        try:
+            for prop in src.bl_rna.properties:
                 name=prop.identifier
                 if name=="rna_type" or prop.is_readonly or prop.type=="COLLECTION":
                     continue
                 try:
-                    setattr(dst_layer,name,getattr(src_layer,name))
+                    setattr(dst,name,getattr(src,name))
                 except Exception:
                     pass
+
+            # Explicit second pass guarantees every Edgewear value survives the
+            # copy, independently of Blender RNA property ordering.
+            for name,value in edgewear_values.items():
+                try:
+                    setattr(dst,name,value)
+                except Exception:
+                    pass
+
+            # The Edgewear color is special: restore it explicitly from the
+            # already-duplicated source node so a destination default cannot
+            # overwrite the original color during the later synchronization.
+            if source_edgewear_node_color is not None:
+                try:
+                    dst.edgewear_color=source_edgewear_node_color
+                except Exception:
+                    pass
+
+            dst.mixer_layers.clear()
+            for src_layer in src.mixer_layers:
+                dst_layer=dst.mixer_layers.add()
+                for prop in src_layer.bl_rna.properties:
+                    name=prop.identifier
+                    if name=="rna_type" or prop.is_readonly or prop.type=="COLLECTION":
+                        continue
+                    try:
+                        setattr(dst_layer,name,getattr(src_layer,name))
+                    except Exception:
+                        pass
+        finally:
+            ML_EDGEWEAR_COPYING=False
+
+        # Now synchronize the duplicated Edgewear node graph from the copied
+        # settings. This preserves the original color/texture and avoids the
+        # callback-order problem that was changing the color on duplication.
+        try:
+            _update_edgewear_color(dst,None)
+            # Restore the exact node color one final time after synchronization.
+            # This prevents any callback-order/default-value interaction from
+            # changing the duplicated material's Edgewear color.
+            if source_edgewear_node_color is not None:
+                restored_color=_find_effect_node(dst_mat,"Edgewear","Color")
+                if restored_color and restored_color.outputs.get("Color"):
+                    restored_color.outputs["Color"].default_value=source_edgewear_node_color
+            _update_edgewear_color_image(dst,None)
+            _update_edgewear_color_mapping(dst,None)
+            _update_edgewear_noise_mapping(dst,None)
+            _update_edgewear_noise(dst,None)
+            _update_edgewear_breakup(dst,None)
+            _update_edgewear_ao_distance(dst,None)
+            _update_edgewear_roughness(dst,None)
+            _update_edgewear_height(dst,None)
+            _update_edgewear_blend_mode(dst,None)
+            _update_edgewear_color_blend(dst,None)
+            _enforce_edgewear_ao_defaults(dst_mat)
+        except Exception:
+            pass
     except Exception:
         pass
 
@@ -2368,7 +2749,7 @@ def _unique_node_name(mat, base):
 
 
 
-_EFFECT_UI_DEFAULT_ORDER = ("Grunge", "Dirt", "Roughness", "AO", "HSV")
+_EFFECT_UI_DEFAULT_ORDER = ("Grunge", "Dirt", "Roughness", "HSV", "Edgewear", "AO")
 
 
 def _effect_ui_order(mat):
@@ -2392,7 +2773,13 @@ def _save_effect_ui_order(mat, order):
 def _effect_group_collapsed(frame, group):
     if not frame:
         return False
-    return bool(frame.get(f"ML_GROUP_{group}_COLLAPSED", False))
+    key=f"ML_GROUP_{group}_COLLAPSED"
+    if key in frame:
+        return bool(frame.get(key,False))
+    # Backward compatibility for Grunge frames created before VISUAL replaced DIFFUSE.
+    if str(group).upper()=="VISUAL":
+        return bool(frame.get("ML_GROUP_DIFFUSE_COLLAPSED",False))
+    return False
 
 
 def _effect_nodes(mat,effect):
@@ -2627,6 +3014,7 @@ def _layout_new_effect(mat,effect):
     frame_colors={
         "Grunge":(0.34,0.16,0.05),
         "Dirt":(0.42,0.22,0.05),
+        "Edgewear":(0.50,0.50,0.50),
         "Roughness":(0.12,0.34,0.10),
         "Material Mixer":(0.08,0.25,0.42),
         "HSV":(0.42,0.08,0.55),
@@ -2754,8 +3142,9 @@ def _new_frame(mat,effect):
     # UX defaults: open the first useful section, keep secondary sections
     # compact. These flags affect only the UI, never the shader graph.
     defaults={
-        "Grunge": {"MASK": False, "DIFFUSE": True, "HEIGHT": True},
+        "Grunge": {"MASK": False, "VISUAL": True, "HEIGHT": True},
         "Dirt": {"MASK": False, "VISUAL": True, "MAPPING": True},
+        "Edgewear": {"EDGE": True, "BREAKUP": True, "VISUAL": False, "MAPPING": True},
         "Roughness": {"MASK": False, "VISUAL": True, "MAPPING": True},
         "AO": {"MASK": True, "VISUAL": False},
         "HSV": {"VISUAL": False},
@@ -2856,6 +3245,12 @@ class ML_OT_effect_texture_source(Operator):
             if self.effect == "Dirt":
                 target = next(
                     (n for n in _effect_nodes(mat, "Dirt")
+                     if n.type == "VALTORGB" and "Noise_Ramp" in n.name),
+                    None
+                )
+            elif self.effect == "Edgewear":
+                target = next(
+                    (n for n in _effect_nodes(mat, "Edgewear")
                      if n.type == "VALTORGB" and "Noise_Ramp" in n.name),
                     None
                 )
@@ -3515,10 +3910,11 @@ class ML_OT_random_image(Operator):
             self.report({'WARNING'},"No images were found in the configured folder or its subfolders."); return {'CANCELLED'}
         image=_load_image_file(random.choice(files))
         if not image: return {'CANCELLED'}
-        prop={("Grunge","COLOR"):"grunge_color_image",("Dirt","COLOR"):"dirt_color_image",("Roughness","IMAGE"):"roughness_image"}.get((self.effect,self.slot))
+        prop={("Grunge","COLOR"):"grunge_color_image",("Dirt","COLOR"):"dirt_color_image",("Edgewear","COLOR"):"edgewear_color_image",("Roughness","IMAGE"):"roughness_image"}.get((self.effect,self.slot))
         if not prop: return {'CANCELLED'}
         setattr(ms,prop,image)
         if self.effect=="Dirt" and self.slot=="COLOR": ms.dirt_color_source="TEXTURE"
+        elif self.effect=="Edgewear" and self.slot=="COLOR": ms.edgewear_color_source="TEXTURE"
         elif self.effect=="Roughness": ms.roughness_source="IMAGE"
         return {'FINISHED'}
 
@@ -3549,12 +3945,13 @@ class ML_OT_open_effect_image(Operator):
                 ms.mixer_layers[idx].mask_source="TEXTURE"
             return {'FINISHED'}
 
-        prop={("Grunge","ALPHA"):"grunge_alpha_image",("Grunge","COLOR"):"grunge_color_image",("Dirt","COLOR"):"dirt_color_image",("Roughness","IMAGE"):"roughness_image"}.get((self.effect,self.slot))
+        prop={("Grunge","ALPHA"):"grunge_alpha_image",("Grunge","COLOR"):"grunge_color_image",("Dirt","COLOR"):"dirt_color_image",("Edgewear","COLOR"):"edgewear_color_image",("Roughness","IMAGE"):"roughness_image"}.get((self.effect,self.slot))
         if not prop: return {'CANCELLED'}
         setattr(ms,prop,image)
         if self.effect=="Grunge" and self.slot=="ALPHA": ms.grunge_alpha_source="TEXTURE"
         elif self.effect=="Grunge" and self.slot=="COLOR": ms.grunge_color_source="TEXTURE"
         elif self.effect=="Dirt" and self.slot=="COLOR": ms.dirt_color_source="TEXTURE"
+        elif self.effect=="Edgewear" and self.slot=="COLOR": ms.edgewear_color_source="TEXTURE"
         elif self.effect=="Roughness": ms.roughness_source="IMAGE"
         return {'FINISHED'}
 
@@ -3590,6 +3987,11 @@ class ML_OT_randomize_noise(Operator):
                 ("roughness_noise_scale",0,100),("roughness_detail",0,100),
                 ("roughness_noise_roughness",0,1),("roughness_lacunarity",0,100),
                 ("roughness_seed",0,10),("roughness_distortion",0,100)
+            ),
+            "Edgewear":(
+                ("edgewear_noise_scale",0,100),("edgewear_noise_detail",0,100),
+                ("edgewear_noise_roughness",0,1),("edgewear_noise_lacunarity",0,100),
+                ("edgewear_noise_seed",0,10),("edgewear_noise_distortion",0,100)
             )
         }
         for name,lo,hi in groups.get(self.effect,()):
@@ -3658,7 +4060,7 @@ class ML_OT_toggle_noise_collapse(Operator):
     effect:StringProperty()
     def execute(self,context):
         st=context.active_object.active_material.material_lab_settings
-        prop={"Grunge":"grunge_noise_collapsed","Roughness":"roughness_noise_collapsed"}.get(self.effect)
+        prop={"Grunge":"grunge_noise_collapsed","Roughness":"roughness_noise_collapsed","Edgewear":"edgewear_noise_collapsed"}.get(self.effect)
         if prop: setattr(st,prop,not getattr(st,prop))
         return {'FINISHED'}
 
@@ -3750,6 +4152,32 @@ def _reset_effect_settings_to_defaults(settings,effect,context):
         settings.dirt_amount=5.0
         settings.dirt_noise_scale=5.0
         settings.dirt_roughness=0.82
+    elif effect=="Edgewear":
+        settings.edgewear_noise_mapping_source="GENERATED"
+        settings.edgewear_color_mapping_source="GENERATED"
+        settings.edgewear_color=(1.0,1.0,1.0,1.0)
+        settings.edgewear_color_source="COLOR"
+        settings.edgewear_color_image=None
+        settings.edgewear_color_tiling=1.0
+        settings.edgewear_breakup=0.8
+        settings.edgewear_ao_distance=0.02
+        settings.edgewear_color_blend=1.0
+        settings.edgewear_blend_mode="MIX"
+        settings.edgewear_noise_scale=10.0
+        settings.edgewear_noise_detail=10.0
+        settings.edgewear_noise_roughness=1.0
+        settings.edgewear_noise_lacunarity=2.0
+        settings.edgewear_noise_seed=0.0
+        settings.edgewear_noise_distortion=0.0
+        settings.edgewear_noise_normalize=False
+        settings.edgewear_noise_collapsed=False
+        settings.edgewear_ao_ramp_collapsed=True
+        settings.edgewear_noise_ramp_collapsed=True
+        settings.edgewear_mask_ramp_collapsed=True
+        settings.edgewear_noise_mapping_collapsed=True
+        settings.edgewear_height=0.0
+        settings.edgewear_height_collapsed=False
+        settings.edgewear_roughness=0.82
     elif effect=="Roughness":
         settings.roughness_source="NOISE"
         settings.roughness_image=None
@@ -4122,7 +4550,7 @@ class ML_OT_add_look(Operator):
             noise.noise_dimensions='4D'
             noise.inputs["Scale"].default_value=5.0
             noise.inputs["Detail"].default_value=5.0
-            noise.inputs["Roughness"].default_value=0.75
+            noise.inputs["Roughness"].default_value=1.0
             noise.inputs["W"].default_value=0.0
 
             ao=nodes.new("ShaderNodeAmbientOcclusion")
@@ -4139,8 +4567,10 @@ class ML_OT_add_look(Operator):
             ao_ramp.label="AO Mask"
             ao_ramp.parent=frame
             ao_ramp["ML_ROLE"]="AORamp"
-            ao_ramp.color_ramp.elements[0].position=0.35
-            ao_ramp.color_ramp.elements[1].position=0.70
+            ao_ramp.color_ramp.elements[0].position=0.0
+            ao_ramp.color_ramp.elements[0].color=(1,1,1,1)
+            ao_ramp.color_ramp.elements[1].position=1.0
+            ao_ramp.color_ramp.elements[1].color=(0,0,0,1)
 
             noise_ramp=nodes.new("ShaderNodeValToRGB")
             noise_ramp.name=_unique_node_name(mat,"ML_Dirt_Noise_Ramp")
@@ -4165,7 +4595,7 @@ class ML_OT_add_look(Operator):
             mask_ramp["ML_ROLE"]="MaskRamp"
             mask_ramp.color_ramp.elements[0].position=0.0
             mask_ramp.color_ramp.elements[0].color=(0,0,0,1)
-            mask_ramp.color_ramp.elements[1].position=0.25
+            mask_ramp.color_ramp.elements[1].position=1.0
             mask_ramp.color_ramp.elements[1].color=(1,1,1,1)
 
             dirt_color=nodes.new("ShaderNodeRGB")
@@ -4193,7 +4623,7 @@ class ML_OT_add_look(Operator):
             amount_color.parent=frame
             amount_color["ML_ROLE"]="Amount"
             amount_color.operation='MULTIPLY'
-            amount_color.inputs[1].default_value=1.0
+            amount_color.inputs[1].default_value=float(mat.material_lab_settings.dirt_amount)
 
             amount_rough=nodes.new("ShaderNodeMath")
             amount_rough.name=_unique_node_name(mat,"ML_Dirt_Amount_Roughness")
@@ -4201,7 +4631,7 @@ class ML_OT_add_look(Operator):
             amount_rough.parent=frame
             amount_rough["ML_ROLE"]="AmountRoughness"
             amount_rough.operation='MULTIPLY'
-            amount_rough.inputs[1].default_value=1.0
+            amount_rough.inputs[1].default_value=float(mat.material_lab_settings.dirt_amount)
 
             color_mix=nodes.new("ShaderNodeMixRGB")
             color_mix.name=_unique_node_name(mat,"ML_Dirt_Color_Mix")
@@ -4232,7 +4662,7 @@ class ML_OT_add_look(Operator):
             links.new(ao.outputs["AO"],ao_ramp.inputs["Fac"])
             ao_ramp.color_ramp.elements[0].position=0.0
             ao_ramp.color_ramp.elements[0].color=(1,1,1,1)
-            ao_ramp.color_ramp.elements[1].position=0.45
+            ao_ramp.color_ramp.elements[1].position=1.0
             ao_ramp.color_ramp.elements[1].color=(0,0,0,1)
 
             links.new(ao_ramp.outputs["Color"],mask_mix.inputs[1])
@@ -4267,8 +4697,253 @@ class ML_OT_add_look(Operator):
 
             _set_effect_mapping_source(mat,"Dirt",mat.material_lab_settings.dirt_mapping_source)
             _update_dirt_ao_amount(mat.material_lab_settings, None)
+            _update_dirt_amount(mat.material_lab_settings, None)
             _update_dirt_color_source(mat.material_lab_settings, None)
             _update_dirt_color_image(mat.material_lab_settings, None)
+
+        elif effect=="Edgewear":
+            # Edgewear = white color + extra roughness, masked by AO and broken
+            # with procedural noise. Optional image texture can be used as
+            # an additional dirt mask.
+            base=bsdf.inputs["Base Color"]
+            base_source=_capture_socket(base)
+            base_value=base.default_value[:]
+
+            rough=bsdf.inputs["Roughness"]
+            rough_source=_capture_socket(rough)
+            rough_value=rough.default_value
+
+            texcoord=nodes.new("ShaderNodeTexCoord")
+            texcoord.name=_unique_node_name(mat,"ML_Edgewear_Coord")
+            texcoord.label="Edgewear Coordinates"
+            texcoord.parent=frame
+            texcoord["ML_ROLE"]="Coord"
+
+            mapping=nodes.new("ShaderNodeMapping")
+            mapping.name=_unique_node_name(mat,"ML_Edgewear_Mapping")
+            mapping.label="Edgewear Mapping"
+            mapping.parent=frame
+            mapping["ML_ROLE"]="Mapping"
+
+            color_mapping=nodes.new("ShaderNodeMapping")
+            color_mapping.name=_unique_node_name(mat,"ML_Edgewear_ColorMapping")
+            color_mapping.label="Edgewear Color Mapping"
+            color_mapping.parent=frame
+            color_mapping["ML_ROLE"]="ColorMapping"
+            color_mapping.inputs["Scale"].default_value=(1.0,1.0,1.0)
+
+            color_image=nodes.new("ShaderNodeTexImage")
+            color_image.name=_unique_node_name(mat,"ML_Edgewear_ColorImage")
+            color_image.label="Edgewear Color Texture"
+            color_image.parent=frame
+            color_image["ML_ROLE"]="ColorImage"
+            color_image.image=mat.material_lab_settings.edgewear_color_image
+
+            noise=nodes.new("ShaderNodeTexNoise")
+            noise.name=_unique_node_name(mat,"ML_Edgewear_Noise")
+            noise.label="Edgewear Noise"
+            noise.parent=frame
+            noise["ML_ROLE"]="Texture"
+            noise.noise_dimensions='4D'
+            noise.inputs["Scale"].default_value=10.0
+            noise.inputs["Detail"].default_value=10.0
+            noise.inputs["Roughness"].default_value=1.0
+            noise.inputs["W"].default_value=0.0
+            try:
+                noise.normalize=bool(mat.material_lab_settings.edgewear_noise_normalize)
+            except Exception:
+                pass
+
+            ao=nodes.new("ShaderNodeAmbientOcclusion")
+            ao.name=_unique_node_name(mat,"ML_Edgewear_AO")
+            ao.label="Edgewear AO"
+            ao.parent=frame
+            ao["ML_ROLE"]="AO"
+            ao.inputs["Distance"].default_value=mat.material_lab_settings.edgewear_ao_distance
+            try:
+                ao.samples=5
+            except Exception:
+                pass
+            try:
+                ao.inside=True
+            except Exception:
+                pass
+            try:
+                ao.only_local=True
+            except Exception:
+                pass
+
+            ao_ramp=nodes.new("ShaderNodeValToRGB")
+            ao_ramp.name=_unique_node_name(mat,"ML_Edgewear_AO_Ramp")
+            ao_ramp.label="AO Mask"
+            ao_ramp.parent=frame
+            ao_ramp["ML_ROLE"]="AORamp"
+            ao_ramp.color_ramp.elements[0].position=0.0
+            ao_ramp.color_ramp.elements[0].color=(1,1,1,1)
+            ao_ramp.color_ramp.elements[1].position=1.0
+            ao_ramp.color_ramp.elements[1].color=(0,0,0,1)
+
+            noise_ramp=nodes.new("ShaderNodeValToRGB")
+            noise_ramp.name=_unique_node_name(mat,"ML_Edgewear_Noise_Ramp")
+            noise_ramp.label="Edgewear Breakup"
+            noise_ramp.parent=frame
+            noise_ramp["ML_ROLE"]="NoiseRamp"
+            noise_ramp.color_ramp.elements[0].position=0.0
+            noise_ramp.color_ramp.elements[1].position=1.0
+
+            mask_mix=nodes.new("ShaderNodeMixRGB")
+            mask_mix.name=_unique_node_name(mat,"ML_Edgewear_Mask_Mix")
+            mask_mix.label="AO × Noise"
+            mask_mix.parent=frame
+            mask_mix["ML_ROLE"]="Mask"
+            mask_mix.blend_type='MULTIPLY'
+            mask_mix.inputs[0].default_value=0.8
+
+            mask_ramp=nodes.new("ShaderNodeValToRGB")
+            mask_ramp.name=_unique_node_name(mat,"ML_Edgewear_Mask_Ramp")
+            mask_ramp.label="Edgewear Mask Contrast"
+            mask_ramp.parent=frame
+            mask_ramp["ML_ROLE"]="MaskRamp"
+            mask_ramp.color_ramp.elements[0].position=0.0
+            mask_ramp.color_ramp.elements[0].color=(0,0,0,1)
+            mask_ramp.color_ramp.elements[1].position=1.0
+            mask_ramp.color_ramp.elements[1].color=(1,1,1,1)
+
+            edgewear_color=nodes.new("ShaderNodeRGB")
+            edgewear_color.name=_unique_node_name(mat,"ML_Edgewear_Color")
+            edgewear_color.label="Edgewear Color"
+            edgewear_color.parent=frame
+            edgewear_color["ML_ROLE"]="Color"
+            edgewear_color.outputs["Color"].default_value=mat.material_lab_settings.edgewear_color
+
+            color_blend=nodes.new("ShaderNodeMixRGB")
+            color_blend.name=_unique_node_name(mat,"ML_Edgewear_ColorBlend")
+            color_blend.label="Edgewear Color Blend"
+            color_blend.parent=frame
+            color_blend["ML_ROLE"]="ColorBlend"
+            color_blend.blend_type=mat.material_lab_settings.edgewear_blend_mode
+            color_blend.inputs[0].default_value=max(0.0,min(1.0,float(mat.material_lab_settings.edgewear_color_blend)))
+            if base_source:
+                links.new(base_source,color_blend.inputs[1])
+            else:
+                color_blend.inputs[1].default_value=base_value
+
+            amount_color=nodes.new("ShaderNodeMath")
+            amount_color.name=_unique_node_name(mat,"ML_Edgewear_Amount_Color")
+            amount_color.label="Edgewear Intensity"
+            amount_color.parent=frame
+            amount_color["ML_ROLE"]="Amount"
+            amount_color.operation='MULTIPLY'
+            amount_color.inputs[1].default_value=float(mat.material_lab_settings.dirt_amount)
+
+            amount_rough=nodes.new("ShaderNodeMath")
+            amount_rough.name=_unique_node_name(mat,"ML_Edgewear_Amount_Roughness")
+            amount_rough.label="Edgewear Roughness Amount"
+            amount_rough.parent=frame
+            amount_rough["ML_ROLE"]="AmountRoughness"
+            amount_rough.operation='MULTIPLY'
+            amount_rough.inputs[1].default_value=float(mat.material_lab_settings.dirt_amount)
+
+            color_mix=nodes.new("ShaderNodeMixRGB")
+            color_mix.name=_unique_node_name(mat,"ML_Edgewear_Color_Mix")
+            color_mix.label="Brown Edgewear"
+            color_mix.parent=frame
+            color_mix["ML_ROLE"]="Mix"
+            color_mix["ML_FINAL"]="BASE_COLOR"
+            color_mix.blend_type='MIX'
+            color_mix.inputs[0].default_value=1.0
+
+            rough_mix=nodes.new("ShaderNodeMixRGB")
+            rough_mix.name=_unique_node_name(mat,"ML_Edgewear_Roughness_Mix")
+            rough_mix.label="Edgewear Roughness"
+            rough_mix.parent=frame
+            rough_mix["ML_ROLE"]="RoughnessMix"
+            rough_mix["ML_FINAL"]="ROUGHNESS"
+            rough_mix.blend_type='MIX'
+            rough_mix.inputs[0].default_value=1.0
+            rough_mix.inputs[2].default_value=(mat.material_lab_settings.edgewear_roughness,mat.material_lab_settings.edgewear_roughness,mat.material_lab_settings.edgewear_roughness,1)
+
+            bump=nodes.new("ShaderNodeBump")
+            bump.name=_unique_node_name(mat,"ML_Edgewear_Bump")
+            bump.label="Edgewear Height"
+            bump.parent=frame
+            bump["ML_ROLE"]="Bump"
+            bump.inputs["Strength"].default_value=0.0
+
+            height_invert=nodes.new("ShaderNodeMath")
+            height_invert.name=_unique_node_name(mat,"ML_Edgewear_HeightInvert")
+            height_invert.label="Edgewear Height Invert"
+            height_invert.parent=frame
+            height_invert["ML_ROLE"]="HeightInvert"
+            height_invert.operation='SUBTRACT'
+            height_invert.inputs[0].default_value=1.0
+
+            links.new(texcoord.outputs["Generated"],mapping.inputs["Vector"])
+            links.new(mapping.outputs["Vector"],noise.inputs["Vector"])
+
+            links.new(noise.outputs["Fac"],noise_ramp.inputs["Fac"])
+
+            # AO is inverted into a cavity mask: white at strong occlusion,
+            # then the black threshold grows outward as Amount increases.
+            links.new(ao.outputs["AO"],ao_ramp.inputs["Fac"])
+            ao_ramp.color_ramp.elements[0].position=0.0
+            ao_ramp.color_ramp.elements[0].color=(1,1,1,1)
+            ao_ramp.color_ramp.elements[1].position=1.0
+            ao_ramp.color_ramp.elements[1].color=(0,0,0,1)
+
+            links.new(ao_ramp.outputs["Color"],mask_mix.inputs[1])
+            links.new(noise_ramp.outputs["Color"],mask_mix.inputs[2])
+            links.new(mask_mix.outputs["Color"],mask_ramp.inputs["Fac"])
+
+            # Amount multiplies the cavity/breakup mask, so the Edgewear Amount
+            # slider now has a real effect on both color and roughness.
+            links.new(mask_ramp.outputs["Color"],amount_color.inputs[0])
+            links.new(mask_ramp.outputs["Color"],amount_rough.inputs[0])
+            links.new(amount_color.outputs["Value"],color_mix.inputs[0])
+            links.new(amount_rough.outputs["Value"],rough_mix.inputs[0])
+            links.new(edgewear_color.outputs["Color"],color_blend.inputs[2])
+            links.new(color_blend.outputs["Color"],color_mix.inputs[2])
+            links.new(texcoord.outputs["Generated"],color_mapping.inputs["Vector"])
+            links.new(color_mapping.outputs["Vector"],color_image.inputs["Vector"])
+
+            if base_source:
+                links.new(base_source,color_mix.inputs[1])
+            else:
+                color_mix.inputs[1].default_value=base_value
+
+            if rough_source:
+                links.new(rough_source,rough_mix.inputs[1])
+            else:
+                rough_mix.inputs[1].default_value=(rough_value, rough_value, rough_value, 1.0)
+
+            links.new(mask_ramp.outputs["Color"],height_invert.inputs[1])
+            links.new(mask_ramp.outputs["Color"],bump.inputs["Height"])
+            if bump.inputs.get("Strength"):
+                bump.inputs["Strength"].default_value=abs(float(mat.material_lab_settings.edgewear_height))
+            if mat.material_lab_settings.edgewear_height < 0.0:
+                for l in list(bump.inputs["Height"].links): links.remove(l)
+                links.new(height_invert.outputs["Value"],bump.inputs["Height"])
+
+            if rough_source:
+                normal_source=_capture_socket(bsdf.inputs["Normal"])
+            else:
+                normal_source=_capture_socket(bsdf.inputs["Normal"])
+            normal_input=bsdf.inputs["Normal"]
+            if normal_source:
+                links.new(normal_source,bump.inputs["Normal"])
+            for l in list(normal_input.links): links.remove(l)
+            links.new(bump.outputs["Normal"],normal_input)
+
+            for l in list(base.links): links.remove(l)
+            for l in list(rough.links): links.remove(l)
+            links.new(color_mix.outputs["Color"],base)
+            links.new(rough_mix.outputs["Color"],rough)
+
+            _set_effect_mapping_source(mat,"Edgewear",mat.material_lab_settings.edgewear_noise_mapping_source)
+            _update_edgewear_color_mapping(mat.material_lab_settings, None)
+            _update_edgewear_color_source(mat.material_lab_settings, None)
+            _update_edgewear_color_image(mat.material_lab_settings, None)
+            _enforce_edgewear_ao_defaults(mat)
 
         elif effect=="Roughness":
             rough=bsdf.inputs["Roughness"]
@@ -5761,7 +6436,7 @@ class ML_PT_main(Panel):
                     op.effect=effect
 
                 add_row=tools_box.row(align=True)
-                for effect in ("AO","HSV"):
+                for effect in ("HSV","Edgewear","AO"):
                     label="Color" if effect=="HSV" else effect
                     op=add_row.operator("material_lab.add_look",text=f"+ {label}")
                     op.effect=effect
@@ -5811,6 +6486,34 @@ class ML_PT_main(Panel):
                         eb=tools_box.box()
 
                         if effect=="Grunge":
+                            # DIFFUSE
+                            sec=eb.box()
+                            mh=sec.row(align=True)
+                            gc=mh.operator(
+                                "material_lab.toggle_effect_group",
+                                text="",
+                                icon='TRIA_RIGHT' if _effect_group_collapsed(frame,"VISUAL") else 'TRIA_DOWN',
+                                emboss=False
+                            )
+                            gc.effect="Grunge"; gc.group="VISUAL"
+                            mh.label(text="VISUAL",icon='COLOR')
+                            if not _effect_group_collapsed(frame,"VISUAL"):
+                                r=sec.row(align=True)
+                                r.prop(settings,"grunge_color_source",text="Source")
+                                if settings.grunge_color_source=="COLOR":
+                                    color=_find_effect_node(mat,effect,"Color")
+                                    if color:
+                                        r2=sec.row(); r2.prop(color.outputs["Color"],"default_value",text="Color")
+                                else:
+                                    r2=sec.row(align=True)
+                                    r2.prop(settings,"grunge_color_image",text="Texture")
+                                    op=r2.operator("material_lab.open_effect_image",text="",icon='FILE_FOLDER'); op.effect="Grunge"; op.slot="COLOR"
+                                    rnd=r2.operator("material_lab.random_image",text="",icon='FILE_REFRESH'); rnd.effect="Grunge"; rnd.slot="COLOR"
+                                sec.prop(settings,"grunge_blending",text="Blending",slider=True)
+                                sec.prop(settings,"grunge_amount",text="Amount",slider=True)
+                                sec.prop(settings,"grunge_color_mapping_source",text="Mapping")
+                                sec.prop(settings,"grunge_color_tiling",text="Tiling",slider=True)
+
                             # MASK
                             sec=eb.box()
                             mh=sec.row(align=True)
@@ -5865,34 +6568,6 @@ class ML_PT_main(Panel):
                                 sec.prop(settings,"grunge_alpha_mapping_source",text="Mapping")
                                 sec.prop(settings,"grunge_alpha_tiling",text="Tiling",slider=True)
 
-                            # DIFFUSE
-                            sec=eb.box()
-                            mh=sec.row(align=True)
-                            gc=mh.operator(
-                                "material_lab.toggle_effect_group",
-                                text="",
-                                icon='TRIA_RIGHT' if _effect_group_collapsed(frame,"DIFFUSE") else 'TRIA_DOWN',
-                                emboss=False
-                            )
-                            gc.effect="Grunge"; gc.group="DIFFUSE"
-                            mh.label(text="DIFFUSE",icon='COLOR')
-                            if not _effect_group_collapsed(frame,"DIFFUSE"):
-                                r=sec.row(align=True)
-                                r.prop(settings,"grunge_color_source",text="Source")
-                                if settings.grunge_color_source=="COLOR":
-                                    color=_find_effect_node(mat,effect,"Color")
-                                    if color:
-                                        r2=sec.row(); r2.prop(color.outputs["Color"],"default_value",text="Color")
-                                else:
-                                    r2=sec.row(align=True)
-                                    r2.prop(settings,"grunge_color_image",text="Texture")
-                                    op=r2.operator("material_lab.open_effect_image",text="",icon='FILE_FOLDER'); op.effect="Grunge"; op.slot="COLOR"
-                                    rnd=r2.operator("material_lab.random_image",text="",icon='FILE_REFRESH'); rnd.effect="Grunge"; rnd.slot="COLOR"
-                                sec.prop(settings,"grunge_blending",text="Blending",slider=True)
-                                sec.prop(settings,"grunge_amount",text="Amount",slider=True)
-                                sec.prop(settings,"grunge_color_mapping_source",text="Mapping")
-                                sec.prop(settings,"grunge_color_tiling",text="Tiling",slider=True)
-
                             # HEIGHT
                             sec=eb.box()
                             mh=sec.row(align=True)
@@ -5908,32 +6583,6 @@ class ML_PT_main(Panel):
                                 sec.prop(settings,"grunge_height",text="Height",slider=True)
 
                         elif effect=="Dirt":
-                            # MASK
-                            sec=eb.box()
-                            mh=sec.row(align=True)
-                            gc=mh.operator(
-                                "material_lab.toggle_effect_group",
-                                text="",
-                                icon='TRIA_RIGHT' if _effect_group_collapsed(frame,"MASK") else 'TRIA_DOWN',
-                                emboss=False
-                            )
-                            gc.effect="Dirt"; gc.group="MASK"
-                            mh.label(text="MASK",icon='MOD_NOISE')
-                            vo=mh.operator("material_lab.view_mask",text="View Mask",icon='HIDE_ON' if settings.dirt_view_mask else 'HIDE_OFF')
-                            vo.effect="Dirt"; vo.index=-1
-                            if not _effect_group_collapsed(frame,"MASK"):
-                                sec.prop(settings,"dirt_ao_amount",text="Amount",slider=True)
-                                sec.prop(settings,"dirt_ao_depth",text="Depth",slider=True)
-                                sec.prop(settings,"dirt_ao_distance",text="Distance",slider=True)
-                                sec.prop(settings,"dirt_noise_scale",text="Noise",slider=True)
-                                ramp=_find_effect_node(mat,effect,"MaskRamp")
-                                if ramp:
-                                    rr=sec.row(align=True)
-                                    rr.prop(settings,"dirt_mask_ramp_collapsed",text="",icon='TRIA_RIGHT' if settings.dirt_mask_ramp_collapsed else 'TRIA_DOWN',emboss=False)
-                                    rr.label(text="Mask Contrast")
-                                    if not settings.dirt_mask_ramp_collapsed:
-                                        sec.template_color_ramp(ramp,"color_ramp",expand=True)
-
                             # VISUAL
                             sec=eb.box()
                             mh=sec.row(align=True)
@@ -5959,6 +6608,32 @@ class ML_PT_main(Panel):
                                 sec.prop(settings,"dirt_amount",text="Intensity",slider=True)
                                 sec.prop(settings,"dirt_color_blend",text="Blending",slider=True)
                                 sec.prop(settings,"dirt_roughness",text="Roughness",slider=True)
+
+                            # MASK
+                            sec=eb.box()
+                            mh=sec.row(align=True)
+                            gc=mh.operator(
+                                "material_lab.toggle_effect_group",
+                                text="",
+                                icon='TRIA_RIGHT' if _effect_group_collapsed(frame,"MASK") else 'TRIA_DOWN',
+                                emboss=False
+                            )
+                            gc.effect="Dirt"; gc.group="MASK"
+                            mh.label(text="MASK",icon='MOD_NOISE')
+                            vo=mh.operator("material_lab.view_mask",text="View Mask",icon='HIDE_ON' if settings.dirt_view_mask else 'HIDE_OFF')
+                            vo.effect="Dirt"; vo.index=-1
+                            if not _effect_group_collapsed(frame,"MASK"):
+                                sec.prop(settings,"dirt_ao_amount",text="Amount",slider=True)
+                                sec.prop(settings,"dirt_ao_depth",text="Depth",slider=True)
+                                sec.prop(settings,"dirt_ao_distance",text="Distance",slider=True)
+                                sec.prop(settings,"dirt_noise_scale",text="Noise",slider=True)
+                                ramp=_find_effect_node(mat,effect,"MaskRamp")
+                                if ramp:
+                                    rr=sec.row(align=True)
+                                    rr.prop(settings,"dirt_mask_ramp_collapsed",text="",icon='TRIA_RIGHT' if settings.dirt_mask_ramp_collapsed else 'TRIA_DOWN',emboss=False)
+                                    rr.label(text="Mask Contrast")
+                                    if not settings.dirt_mask_ramp_collapsed:
+                                        sec.template_color_ramp(ramp,"color_ramp",expand=True)
 
                             # MAPPING
                             sec=eb.box()
@@ -6047,7 +6722,224 @@ class ML_PT_main(Panel):
                             if not _effect_group_collapsed(frame,"MAPPING"):
                                 sec.prop(settings,"roughness_mapping_source",text="Coordinate")
 
+                        elif effect=="Edgewear":
+                            # VISUAL
+                            sec=eb.box()
+                            mh=sec.row(align=True)
+                            gc=mh.operator(
+                                "material_lab.toggle_effect_group",
+                                text="",
+                                icon='TRIA_RIGHT' if _effect_group_collapsed(frame,"VISUAL") else 'TRIA_DOWN',
+                                emboss=False
+                            )
+                            gc.effect="Edgewear"; gc.group="VISUAL"
+                            mh.label(text="VISUAL",icon='COLOR')
+                            if not _effect_group_collapsed(frame,"VISUAL"):
+                                sec.prop(settings,"edgewear_color_source",text="Color")
+                                blend_row=sec.row(align=True)
+                                blend_slider=blend_row.row(align=True)
+                                blend_slider.scale_x=0.8
+                                blend_slider.prop(settings,"edgewear_color_blend",text="Blending",slider=True)
+                                blend_row.prop(settings,"edgewear_blend_mode",text="")
+                                if settings.edgewear_color_source=="COLOR":
+                                    color=_find_effect_node(mat,effect,"Color")
+                                    if color: sec.prop(color.outputs["Color"],"default_value",text="Color")
+                                else:
+                                    r=sec.row(align=True)
+                                    r.prop(settings,"edgewear_color_image",text="Texture")
+                                    op=r.operator("material_lab.open_effect_image",text="",icon='FILE_FOLDER'); op.effect="Edgewear"; op.slot="COLOR"
+                                    rnd=r.operator("material_lab.random_image",text="",icon='FILE_REFRESH'); rnd.effect="Edgewear"; rnd.slot="COLOR"
+                                    sec.prop(settings,"edgewear_color_tiling",text="Tiling",slider=True)
+                                    mp=sec.row(align=True)
+                                    mc=mp.operator("material_lab.toggle_effect_group",text="",icon='TRIA_RIGHT' if _effect_group_collapsed(frame,"MAPPING") else 'TRIA_DOWN',emboss=False)
+                                    mc.effect="Edgewear"; mc.group="MAPPING"
+                                    mp.label(text="Mapping",icon='OBJECT_DATA')
+                                    if not _effect_group_collapsed(frame,"MAPPING"):
+                                        sec.prop(settings,"edgewear_color_mapping_source",text="Coordinate")
+
+                            # EDGE
+                            sec=eb.box()
+                            mh=sec.row(align=True)
+                            gc=mh.operator(
+                                "material_lab.toggle_effect_group",
+                                text="",
+                                icon='TRIA_RIGHT' if _effect_group_collapsed(frame,"EDGE") else 'TRIA_DOWN',
+                                emboss=False
+                            )
+                            gc.effect="Edgewear"; gc.group="EDGE"
+                            mh.label(text="EDGE",icon='MESH_CIRCLE')
+                            vo=mh.operator("material_lab.view_mask",text="View Mask",icon='HIDE_ON' if settings.edgewear_view_mask else 'HIDE_OFF')
+                            vo.effect="Edgewear"; vo.index=-1
+                            if not _effect_group_collapsed(frame,"EDGE"):
+                                ao_ramp=_find_effect_node(mat,effect,"AORamp")
+                                if ao_ramp:
+                                    rr=sec.row(align=True)
+                                    rr.prop(settings,"edgewear_ao_ramp_collapsed",text="",icon='TRIA_RIGHT' if settings.edgewear_ao_ramp_collapsed else 'TRIA_DOWN',emboss=False)
+                                    rr.label(text="AO Mask")
+                                    if not settings.edgewear_ao_ramp_collapsed:
+                                        sec.template_color_ramp(ao_ramp,"color_ramp",expand=True)
+                                sec.prop(settings,"edgewear_ao_distance",text="Distance",slider=True)
+                                mask_ramp=_find_effect_node(mat,effect,"MaskRamp")
+                                if mask_ramp:
+                                    rr=sec.row(align=True)
+                                    rr.prop(settings,"edgewear_mask_ramp_collapsed",text="",icon='TRIA_RIGHT' if settings.edgewear_mask_ramp_collapsed else 'TRIA_DOWN',emboss=False)
+                                    rr.label(text="Mask Contrast")
+                                    if not settings.edgewear_mask_ramp_collapsed:
+                                        sec.template_color_ramp(mask_ramp,"color_ramp",expand=True)
+
+                            # BREAKUP
+                            sec=eb.box()
+                            mh=sec.row(align=True)
+                            gc=mh.operator(
+                                "material_lab.toggle_effect_group",
+                                text="",
+                                icon='TRIA_RIGHT' if _effect_group_collapsed(frame,"BREAKUP") else 'TRIA_DOWN',
+                                emboss=False
+                            )
+                            gc.effect="Edgewear"; gc.group="BREAKUP"
+                            mh.label(text="BREAKUP",icon='MOD_NOISE')
+                            if not _effect_group_collapsed(frame,"BREAKUP"):
+                                ramp=_find_effect_node(mat,effect,"NoiseRamp")
+                                if ramp:
+                                    rr=sec.row(align=True)
+                                    rr.prop(settings,"edgewear_noise_ramp_collapsed",text="",icon='TRIA_RIGHT' if settings.edgewear_noise_ramp_collapsed else 'TRIA_DOWN',emboss=False)
+                                    rr.label(text="Edgewear Breakup")
+                                    if not settings.edgewear_noise_ramp_collapsed:
+                                        sec.template_color_ramp(ramp,"color_ramp",expand=True)
+                                sec.prop(settings,"edgewear_breakup",text="Breakup",slider=True)
+                                nr=sec.row(align=True)
+                                nc=nr.operator("material_lab.toggle_noise_collapse",text="",icon='TRIA_RIGHT' if settings.edgewear_noise_collapsed else 'TRIA_DOWN',emboss=False)
+                                nc.effect="Edgewear"
+                                nr.label(text="Noise")
+                                rr=nr.operator("material_lab.randomize_noise",text="Randomize",icon='FILE_REFRESH'); rr.effect="Edgewear"
+                                if not settings.edgewear_noise_collapsed:
+                                    for prop_name,label in (
+                                        ("edgewear_noise_scale","Scale"),
+                                        ("edgewear_noise_detail","Detail"),
+                                        ("edgewear_noise_roughness","Roughness"),
+                                        ("edgewear_noise_lacunarity","Lacunarity"),
+                                        ("edgewear_noise_seed","Seed"),
+                                        ("edgewear_noise_distortion","Distortion"),
+                                    ):
+                                        sec.prop(settings,prop_name,text=label,slider=True)
+                                    sec.prop(settings,"edgewear_noise_normalize",text="Normalize")
+                                    mp=sec.row(align=True)
+                                    mc=mp.operator("material_lab.toggle_effect_group",text="",icon='TRIA_RIGHT' if _effect_group_collapsed(frame,"NOISE_MAPPING") else 'TRIA_DOWN',emboss=False)
+                                    mc.effect="Edgewear"; mc.group="NOISE_MAPPING"
+                                    mp.label(text="Noise Mapping",icon='OBJECT_DATA')
+                                    if not _effect_group_collapsed(frame,"NOISE_MAPPING"):
+                                        sec.prop(settings,"edgewear_noise_mapping_source",text="Coordinate")
+
+                            # ROUGHNESS
+                            sec=eb.box()
+                            mh=sec.row(align=True)
+                            gc=mh.operator("material_lab.toggle_effect_group",text="",icon='TRIA_RIGHT' if _effect_group_collapsed(frame,"ROUGHNESS") else 'TRIA_DOWN',emboss=False)
+                            gc.effect="Edgewear"; gc.group="ROUGHNESS"
+                            mh.label(text="ROUGHNESS",icon='MOD_PHYSICS')
+                            if not _effect_group_collapsed(frame,"ROUGHNESS"):
+                                sec.prop(settings,"edgewear_roughness",text="Roughness",slider=True)
+
+                            # HEIGHT
+                            sec=eb.box()
+                            mh=sec.row(align=True)
+                            gc=mh.operator("material_lab.toggle_effect_group",text="",icon='TRIA_RIGHT' if _effect_group_collapsed(frame,"HEIGHT") else 'TRIA_DOWN',emboss=False)
+                            gc.effect="Edgewear"; gc.group="HEIGHT"
+                            mh.label(text="HEIGHT",icon='MATERIAL')
+                            if not _effect_group_collapsed(frame,"HEIGHT"):
+                                sec.prop(settings,"edgewear_height",text="Height",slider=True)
+                        elif effect=="Roughness":
+                            # VISUAL
+                            sec=eb.box()
+                            mh=sec.row(align=True)
+                            gc=mh.operator(
+                                "material_lab.toggle_effect_group",
+                                text="",
+                                icon='TRIA_RIGHT' if _effect_group_collapsed(frame,"VISUAL") else 'TRIA_DOWN',
+                                emboss=False
+                            )
+                            gc.effect="Roughness"; gc.group="VISUAL"
+                            mh.label(text="VISUAL",icon='COLOR')
+                            if not _effect_group_collapsed(frame,"VISUAL"):
+                                sec.prop(settings,"roughness_value",text="Roughness",slider=True)
+
+                            # MASK
+                            sec=eb.box()
+                            mh=sec.row(align=True)
+                            gc=mh.operator(
+                                "material_lab.toggle_effect_group",
+                                text="",
+                                icon='TRIA_RIGHT' if _effect_group_collapsed(frame,"MASK") else 'TRIA_DOWN',
+                                emboss=False
+                            )
+                            gc.effect="Roughness"; gc.group="MASK"
+                            mh.label(text="MASK",icon='MOD_NOISE')
+                            vo=mh.operator("material_lab.view_mask",text="View Mask",icon='HIDE_ON' if settings.roughness_view_mask else 'HIDE_OFF')
+                            vo.effect="Roughness"; vo.index=-1
+                            rr=mh.operator("material_lab.randomize_noise",text="Randomize",icon='FILE_REFRESH'); rr.effect="Roughness"
+                            if not _effect_group_collapsed(frame,"MASK"):
+                                r=sec.row(align=True)
+                                r.prop(settings,"roughness_source",text="Source")
+                                if settings.roughness_source=="IMAGE":
+                                    r2=sec.row(align=True)
+                                    r2.prop(settings,"roughness_image",text="Texture")
+                                    op=r2.operator("material_lab.open_effect_image",text="",icon='FILE_FOLDER'); op.effect="Roughness"; op.slot="IMAGE"
+                                elif settings.roughness_source=="NOISE":
+                                    if not settings.roughness_noise_collapsed:
+                                        for prop_name,label in (
+                                            ("roughness_noise_scale","Scale"),
+                                            ("roughness_detail","Detail"),
+                                            ("roughness_noise_roughness","Roughness"),
+                                            ("roughness_lacunarity","Lacunarity"),
+                                            ("roughness_seed","Seed"),
+                                            ("roughness_distortion","Distortion"),
+                                        ):
+                                            sec.prop(settings,prop_name,text=label,slider=True)
+                                    nr=sec.row(align=True)
+                                    nc=nr.operator("material_lab.toggle_noise_collapse",text="",icon='TRIA_RIGHT' if settings.roughness_noise_collapsed else 'TRIA_DOWN',emboss=False); nc.effect="Roughness"
+                                    nr.label(text="Noise")
+                                ramp=_find_effect_node(mat,effect,"Mask")
+                                if ramp:
+                                    rr=sec.row(align=True)
+                                    rr.prop(settings,"roughness_mask_ramp_collapsed",text="",icon='TRIA_RIGHT' if settings.roughness_mask_ramp_collapsed else 'TRIA_DOWN',emboss=False)
+                                    rr.label(text="Mask Contrast")
+                                    if not settings.roughness_mask_ramp_collapsed:
+                                        sec.template_color_ramp(ramp,"color_ramp",expand=True)
+                                sec.prop(settings,"roughness_tiling",text="Tiling",slider=True)
+
+                            # MAPPING
+                            sec=eb.box()
+                            mh=sec.row(align=True)
+                            gc=mh.operator(
+                                "material_lab.toggle_effect_group",
+                                text="",
+                                icon='TRIA_RIGHT' if _effect_group_collapsed(frame,"MAPPING") else 'TRIA_DOWN',
+                                emboss=False
+                            )
+                            gc.effect="Roughness"; gc.group="MAPPING"
+                            mh.label(text="MAPPING",icon='OBJECT_DATA')
+                            if not _effect_group_collapsed(frame,"MAPPING"):
+                                sec.prop(settings,"roughness_mapping_source",text="Coordinate")
+
                         elif effect=="AO":
+                            # VISUAL
+                            sec=eb.box()
+                            mh=sec.row(align=True)
+                            gc=mh.operator(
+                                "material_lab.toggle_effect_group",
+                                text="",
+                                icon='TRIA_RIGHT' if _effect_group_collapsed(frame,"VISUAL") else 'TRIA_DOWN',
+                                emboss=False
+                            )
+                            gc.effect="AO"; gc.group="VISUAL"
+                            mh.label(text="VISUAL",icon='COLOR')
+                            if not _effect_group_collapsed(frame,"VISUAL"):
+                                color=_find_effect_node(mat,effect,"Color")
+                                if color: sec.prop(color.outputs["Color"],"default_value",text="Color")
+                                sec.prop(settings,"ao_amount",text="Amount",slider=True)
+                                sec.prop(settings,"ao_depth",text="Depth",slider=True)
+                                sec.prop(settings,"ao_distance",text="Distance",slider=True)
+                                sec.prop(settings,"ao_color_blend",text="Blending",slider=True)
+
                             # MASK
                             sec=eb.box()
                             mh=sec.row(align=True)
@@ -6069,25 +6961,6 @@ class ML_PT_main(Panel):
                                     rr.label(text="Mask Contrast")
                                     if not settings.ao_mask_ramp_collapsed:
                                         sec.template_color_ramp(ramp,"color_ramp",expand=True)
-
-                            # VISUAL
-                            sec=eb.box()
-                            mh=sec.row(align=True)
-                            gc=mh.operator(
-                                "material_lab.toggle_effect_group",
-                                text="",
-                                icon='TRIA_RIGHT' if _effect_group_collapsed(frame,"VISUAL") else 'TRIA_DOWN',
-                                emboss=False
-                            )
-                            gc.effect="AO"; gc.group="VISUAL"
-                            mh.label(text="VISUAL",icon='COLOR')
-                            if not _effect_group_collapsed(frame,"VISUAL"):
-                                color=_find_effect_node(mat,effect,"Color")
-                                if color: sec.prop(color.outputs["Color"],"default_value",text="Color")
-                                sec.prop(settings,"ao_amount",text="Amount",slider=True)
-                                sec.prop(settings,"ao_depth",text="Depth",slider=True)
-                                sec.prop(settings,"ao_distance",text="Distance",slider=True)
-                                sec.prop(settings,"ao_color_blend",text="Blending",slider=True)
 
                         elif effect=="HSV":
                             # VISUAL
